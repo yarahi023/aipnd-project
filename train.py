@@ -1,7 +1,6 @@
 import torch
-from torch import nn, optim
+from torch import nn
 from torchvision import datasets, transforms, models
-from collections import OrderedDict
 import argparse
 from os.path import isdir
 from torch.utils.data import DataLoader
@@ -14,7 +13,7 @@ def args_parser():
     parser.add_argument('--learning_rate', dest="learning_rate", action="store", default=0.0001, help='learning_rate options: 0.0001 and 0.01')
     parser.add_argument('--hidden_units', type=int, dest="hidden_units", action="store", default=4096, help='hidden units options: 4096 and 512')
     parser.add_argument('--epochs', dest="epochs", action="store", type=int, default=4, help='epochs options:4 and 20')
-    parser.add_argument('--gpu', dest="gpu", action="store", default="gpu", help='options:GPU and CPU') 
+    parser.add_argument('--gpu', dest="gpu", action="store_true", help='Use GPU for training if available.') 
     args = parser.parse_args()
     
     if args.learning_rate not in [0.0001, 0.01]:
@@ -73,15 +72,13 @@ def primaryloader_model(architecture="vgg16"):
     return model
 
 def initial_classifier(model, hidden_units):
-    classifier = nn.Sequential(OrderedDict([
-        ('inputs', nn.Linear(25088, hidden_units)),
-        ('batchnorm1', nn.BatchNorm1d(hidden_units)),
-        ('dropout', nn.Dropout(p=0.5)),
-        ('relu', nn.ReLU()),
-        ('fc2', nn.Linear(hidden_units, 102)),
-        ('batchnorm2', nn.BatchNorm1d(102)),
-        ('output', nn.LogSoftmax(dim=1))
-    ]))
+    classifier = nn.Sequential(nn.Linear(25088, hidden_units),
+                               nn.BatchNorm1d(hidden_units),
+                               nn.Dropout(p=0.5),
+                               nn.ReLU(),
+                               nn.Linear(hidden_units, 102),
+                               nn.BatchNorm1d(102),
+                               nn.LogSoftmax(dim=1))
 
     model.classifier = classifier
     for param in model.classifier.parameters():
