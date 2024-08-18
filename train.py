@@ -8,12 +8,13 @@ from torch.utils.data import DataLoader
 
 def args_parser():
     parser = argparse.ArgumentParser(description="train.py")
+    parser.add_argument('--data_dir', dest="data_dir", action="store", default='flowers', help='Directory containing the dataset.')
     parser.add_argument('--save_dir', dest="save_dir", action="store", default="./checkpoint.pth")
-    parser.add_argument('--arch', dest="arch", action="store", default="vgg16", type = str, help='Deep NN architecture, options: "vgg16" and "vgg13"')
+    parser.add_argument('--arch', dest="arch", action="store", default="vgg16", type=str, help='Deep NN architecture, options: "vgg16" and "vgg13"')
     parser.add_argument('--learning_rate', dest="learning_rate", action="store", default=0.0001, help='learning_rate options: 0.0001 and 0.01')
     parser.add_argument('--hidden_units', type=int, dest="hidden_units", action="store", default=4096, help='hidden units options: 4096 and 512')
     parser.add_argument('--epochs', dest="epochs", action="store", type=int, default=4, help='epochs options:4 and 20')
-    parser.add_argument('--gpu', dest="gpu", action="store", default="gpu",  help='options:GPU and cpU') 
+    parser.add_argument('--gpu', dest="gpu", action="store", default="gpu", help='options:GPU and CPU') 
     args = parser.parse_args()
     
     if args.learning_rate not in [0.0001, 0.01]:
@@ -23,22 +24,24 @@ def args_parser():
     return args
 
 def train_transformer(train_dir):
-    train_transforms = transforms.Compose([transforms.RandomResizedCrop(size=224),
-                                           transforms.RandomRotation(30),
-                                           transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-                                           transforms.RandomHorizontalFlip(),
-                                           transforms.ToTensor(),
-                                           transforms.Normalize([0.485,0.456,0.406],
-                                                                [0.229,0.224,0.225])])
+    train_transforms = transforms.Compose([
+        transforms.RandomResizedCrop(size=224),
+        transforms.RandomRotation(30),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
     train_data = datasets.ImageFolder(train_dir, transform=train_transforms)
     return train_data
  
 def test_transformer(test_dir):
-    test_transforms = transforms.Compose([transforms.Resize(size=256),
-                                          transforms.CenterCrop(size=224),
-                                          transforms.ToTensor(),
-                                          transforms.Normalize([0.485,0.456,0.406],
-                                                               [0.229,0.224,0.225])])
+    test_transforms = transforms.Compose([
+        transforms.Resize(size=256),
+        transforms.CenterCrop(size=224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
     test_data = datasets.ImageFolder(test_dir, transform=test_transforms)
     return test_data
                                           
@@ -58,39 +61,32 @@ def check_gpu(gpu_arg):
         return torch.device("cpu")
                              
 def primaryloader_model(architecture="vgg16"):
-          model = models.vgg16(pretrained=True)
-          model.name = "vgg16"
-        
-     for param in model.features.parameters():
-         param.requires_grad = False
-     return model
+    if architecture == "vgg13":
+        model = models.vgg13(pretrained=True)
+        model.name = "vgg13"
+    else:
+        model = models.vgg16(pretrained=True)
+        model.name = "vgg16"
+
+    for param in model.features.parameters():
+        param.requires_grad = False
+    return model
 
 def initial_classifier(model, hidden_units):
     classifier = nn.Sequential(OrderedDict([
-    ('inputs', nn.Linear(25088, 4096)),
-    ('batchnorm1', nn.BatchNorm1d(4096)),
-    ('dropout', nn.Dropout(p=0.5)),
-    ('relu', nn.ReLU()),
-    ('fc2', nn.Linear(4096, 102)),
-    ('batchnorm2', nn.BatchNorm1d(102)),
-    ('output', nn.LogSoftmax(dim=1))
-]))
+        ('inputs', nn.Linear(25088, hidden_units)),
+        ('batchnorm1', nn.BatchNorm1d(hidden_units)),
+        ('dropout', nn.Dropout(p=0.5)),
+        ('relu', nn.ReLU()),
+        ('fc2', nn.Linear(hidden_units, 102)),
+        ('batchnorm2', nn.BatchNorm1d(102)),
+        ('output', nn.LogSoftmax(dim=1))
+    ]))
 
-model.classifier = classifier
-                                          
+    model.classifier = classifier
     for param in model.classifier.parameters():
         param.requires_grad = True
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-
-
-criterion = nn.CrossEntropyLoss()
-
-optimizer = torch.optim.Adam(model.classifier.parameters(), lr=0.0001)
-                                          
-model.classifier = classifier
     return classifier                                          
 
 def evaluate(model, dataloader, criterion, device):
@@ -184,14 +180,14 @@ def initial_checkpoint(model, save_dir, train_data, optimizer):
         'hidden_layer1': 4096,
         'dropout': 0.5,  
         'epochs': 4
-}
+    }
     torch.save(checkpoint, f'{save_dir}/checkpoint.pth')
 
 
 def main():
     args = args_parser()
 
-    data_dir = 'flowers'
+    data_dir = args.data_dir 
     train_dir, valid_dir, test_dir = [f"{data_dir}/{x}" for x in ['train', 'valid', 'test']]
     
     train_data = train_transformer(train_dir)
@@ -217,7 +213,7 @@ def main():
     model.to(device)
 
     criterion = nn.NLLLoss()
-    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.classifier.parameters(), lr=args.learning_rate)
 
     train_model(model, dataloaders, criterion, optimizer, device, args.epochs, print_every=50)
 
@@ -225,8 +221,7 @@ def main():
     
     calculate_accuracy(model, dataloaders['test'], device)
 
-    initial_checkpoint(model, args.save_dir, train_data)
+    initial_checkpoint(model, args.save_dir, train_data, optimizer)
 
 if __name__ == '__main__':
     main()
-           
